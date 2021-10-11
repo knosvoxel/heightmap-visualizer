@@ -249,6 +249,7 @@ int main()
       model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
       model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0, 0, 1));
       model = glm::scale(model, glm::vec3(10.0f, 10.0f * M / N, 10.0f));
+
       modelShader.setMat4("model", model);
 
       // ImGui Setup
@@ -303,12 +304,19 @@ int main()
       bool generateGrid = ImGui::Button("Generate Grid");
       if (generateGrid)
       {
-         modelShader.setVec3("heightmapColor", heightmapColor);
-         std::cout << "Generating grid" << '\n';
-         vertices.clear();
-         indices.clear();
-         generate_grid(N, M, vertices, indices);
-         vao = generate_vao(vertices, indices);
+         if (imageLoaded)
+         {
+            modelShader.setVec3("heightmapColor", heightmapColor);
+            std::cout << "Generating grid" << '\n';
+            vertices.clear();
+            indices.clear();
+            generate_grid(N, M, vertices, indices);
+            vao = generate_vao(vertices, indices);
+         }
+         else
+         {
+            std::cout << "No image loaded.\n";
+         }
       }
       ImGui::SameLine();
       ImGui::PushItemWidth(114);
@@ -526,44 +534,46 @@ float f(float x, float y)
 // ---------------------------------------------------------------------
 void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<glm::uvec3> &indices)
 {
-   for (int i = 0; i <= N; ++i) // i = row
    {
-      for (int j = 0; j <= M; ++j) // y = column
+      for (int i = 0; i <= N; ++i) // i = row
       {
-         float x = (float)j / (float)N; // at position j/N is x
-         float y = (float)i / (float)M; // at position i/N is y
-         float z = f(x, y);
-         //std::cout << "Row: " << i << " Column: " << j << " Value: " << z << '\n';
-         if (imageLoaded)
+         for (int j = 0; j <= M; ++j) // y = column
          {
-            size_t index = RGBA * (j * image_width + i);
-            float red = static_cast<float>(image[index + 0]);
-            float green = static_cast<float>(image[index + 1]);
-            float blue = static_cast<float>(image[index + 2]);
+            float x = (float)j / (float)N; // at position j/N is x
+            float y = (float)i / (float)M; // at position i/N is y
+            float z = f(x, y);
+            //std::cout << "Row: " << i << " Column: " << j << " Value: " << z << '\n';
+            if (imageLoaded)
+            {
+               size_t index = RGBA * (j * image_width + i);
+               float red = static_cast<float>(image[index + 0]);
+               float green = static_cast<float>(image[index + 1]);
+               float blue = static_cast<float>(image[index + 2]);
 
-            //std::cout << red << ' ' << green << ' ' << blue << '\n';
+               //std::cout << red << ' ' << green << ' ' << blue << '\n';
 
-            z = ((red * green * blue) / (255 * 255 * 255)) * heightScaling / 100;
-            //std::cout << z << '\n';
+               z = ((red * green * blue) / (255 * 255 * 255)) * heightScaling / 100;
+               //std::cout << z << '\n';
+            }
+            vertices.push_back(glm::vec3(x, y, z));
+
+            // NORMALS
          }
-         vertices.push_back(glm::vec3(x, y, z));
-
-         // NORMALS
       }
-   }
 
-   for (int j = 0; j < N; ++j)
-   {
-      for (int i = 0; i < M; ++i)
+      for (int j = 0; j < N; ++j)
       {
-         int row1 = j * (M + 1);
-         int row2 = (j + 1) * (M + 1);
+         for (int i = 0; i < M; ++i)
+         {
+            int row1 = j * (M + 1);
+            int row2 = (j + 1) * (M + 1);
 
-         // triangle 1
-         indices.push_back(glm::uvec3(row1 + i, row1 + i + 1, row2 + i + 1));
+            // triangle 1
+            indices.push_back(glm::uvec3(row1 + i, row1 + i + 1, row2 + i + 1));
 
-         // triangle 2
-         indices.push_back(glm::uvec3(row1 + i, row2 + i + 1, row2 + i));
+            // triangle 2
+            indices.push_back(glm::uvec3(row1 + i, row2 + i + 1, row2 + i));
+         }
       }
    }
 }
