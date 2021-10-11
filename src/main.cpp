@@ -42,7 +42,7 @@ const uint16_t SCR_WIDTH = 800;
 const uint16_t SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(5.0f, 5.0f, 5.0f));
+Camera camera(glm::vec3(5.0f, 5.0f, 10.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -66,8 +66,9 @@ int x = image_width;
 int y = image_height;
 
 static char filepath[128] = {0};
+static char currentFilename[128] = "-";
 bool imageLoaded = false;
-float heightScaling = 1.0f;
+float heightScaling = 10.0f;
 glm::vec3 heightmapColor{1.0f, 1.0f, 1.0f};
 
 static int N = 40; // image width
@@ -246,7 +247,8 @@ int main()
       glm::mat4 model = glm::mat4(1.0f);
       model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
       model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
-      model = glm::scale(model, glm::vec3(10.0f, 10.0f, 10.0f));
+      model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0, 0, 1));
+      model = glm::scale(model, glm::vec3(10.0f, 10.0f * M / N, 10.0f));
       modelShader.setMat4("model", model);
 
       // ImGui Setup
@@ -256,8 +258,8 @@ int main()
 
       // Basic GUI for loading images
       ImGui::Begin("Heightmap");
+      ImGui::PushItemWidth(300);
       ImGui::InputText("File Path", filepath, IM_ARRAYSIZE(filepath));
-      ImGui::PushItemWidth(150);
       /*ImGui::DragInt("X", &x);
       if (x >= image_width)
          x = image_width;
@@ -275,7 +277,7 @@ int main()
          returnColorValues(x, y, image_width, RGBA, image);
       }
       ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);*/
-      bool showImageSize = ImGui::Button("Image Size");
+      /*bool showImageSize = ImGui::Button("Image Size");
       if (showImageSize)
       {
          if (!image.empty())
@@ -286,31 +288,40 @@ int main()
          {
             std::cout << "No image loaded.\n";
          }
-      }
-      ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+      }*/
+      //ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
       bool loadFile = ImGui::Button("Load File");
       if (loadFile)
       {
-         load_image(image, filepath, image_width, image_height, N);
+         bool success = load_image(image, filepath, image_width, image_height, N);
+         if (success)
+            strcpy(currentFilename, filepath);
       }
 
-      ImGui::Separator();
-
-      ImGui::InputInt("Size of N", &N); // TODO: FIX THIS
       ImGui::SameLine();
-      ImGui::InputInt("Size of M", &M); // TODO: FIX THIS
-      bool regenerateGrid = ImGui::Button("Regenerate Grid");
-      if (regenerateGrid)
+
+      bool generateGrid = ImGui::Button("Generate Grid");
+      if (generateGrid)
       {
          modelShader.setVec3("heightmapColor", heightmapColor);
-         std::cout << "Regenerating grid" << '\n';
+         std::cout << "Generating grid" << '\n';
          vertices.clear();
          indices.clear();
          generate_grid(N, M, vertices, indices);
          vao = generate_vao(vertices, indices);
       }
-      ImGui::PushItemWidth(150);
-      ImGui::DragFloat("Height Scale Factor", &heightScaling);
+      ImGui::SameLine();
+      ImGui::PushItemWidth(114);
+      ImGui::DragFloat("Z Scale Factor", &heightScaling);
+
+      //ImGui::InputInt("Size of N", &N);
+      ImGui::Text("Width: %i", N);
+      ImGui::SameLine();
+
+      //ImGui::InputInt("Size of M", &M);
+      ImGui::Text("Height: %i", M);
+      ImGui::SameLine();
+      ImGui::Text("Loaded file: %s", currentFilename);
 
       ImGui::Separator();
 
@@ -459,6 +470,7 @@ bool load_image(std::vector<unsigned char> &image, const std::string &filename, 
       imageLoaded = true;
       std::cout << "Image width: " << image_width << ", Image height: " << image_height << '\n';
       N = image_width;
+      M = image_height;
    }
    else
    {
@@ -516,10 +528,10 @@ void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<g
 {
    for (int i = 0; i <= N; ++i) // i = row
    {
-      for (int j = 0; j <= N; ++j) // y = column
+      for (int j = 0; j <= M; ++j) // y = column
       {
          float x = (float)j / (float)N; // at position j/N is x
-         float y = (float)i / (float)N; // at position i/N is y
+         float y = (float)i / (float)M; // at position i/N is y
          float z = f(x, y);
          //std::cout << "Row: " << i << " Column: " << j << " Value: " << z << '\n';
          if (imageLoaded)
@@ -531,7 +543,7 @@ void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<g
 
             //std::cout << red << ' ' << green << ' ' << blue << '\n';
 
-            z = ((red * green * blue) / (255 * 255 * 255)) * heightScaling;
+            z = ((red * green * blue) / (255 * 255 * 255)) * heightScaling / 100;
             //std::cout << z << '\n';
          }
          vertices.push_back(glm::vec3(x, y, z));
@@ -542,10 +554,10 @@ void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<g
 
    for (int j = 0; j < N; ++j)
    {
-      for (int i = 0; i < N; ++i)
+      for (int i = 0; i < M; ++i)
       {
-         int row1 = j * (N + 1);
-         int row2 = (j + 1) * (N + 1);
+         int row1 = j * (M + 1);
+         int row2 = (j + 1) * (M + 1);
 
          // triangle 1
          indices.push_back(glm::uvec3(row1 + i, row1 + i + 1, row2 + i + 1));
