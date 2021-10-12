@@ -42,7 +42,7 @@ const uint16_t SCR_WIDTH = 800;
 const uint16_t SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(5.0f, 5.0f, 10.0f));
+Camera camera(glm::vec3(5.0f, 5.0f, 5.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -325,6 +325,10 @@ int main()
       ImGui::SameLine();
       ImGui::PushItemWidth(114);
       ImGui::DragFloat("Z Scale Factor", &heightScaling);
+      if(heightScaling >= 100)
+         heightScaling = 100;
+      if(heightScaling <= 0)
+         heightScaling = 0;
 
       //ImGui::InputInt("Size of N", &N);
       ImGui::Text("Width: %i", image_width);
