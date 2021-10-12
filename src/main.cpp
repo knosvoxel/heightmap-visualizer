@@ -245,12 +245,13 @@ int main()
       modelShader.setMat4("view", view);
 
       glm::mat4 model = glm::mat4(1.0f);
+      glm::mat4 xFlip = glm::mat4(1.0f);
+      xFlip[0][0] = -1.0f;
       model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
       model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
       model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0, 0, 1));
-
       model = glm::scale(model, glm::vec3(10.0f, 10.0f * M / N, 10.0f));
-
+      model = model * xFlip;
       modelShader.setMat4("model", model);
 
       // ImGui Setup
