@@ -29,7 +29,7 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
 void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void processInput(GLFWwindow *window);
 
-bool load_image(std::vector<unsigned char> &image, const std::string &filename, int &x, int &y, int &N);
+bool load_image(std::vector<unsigned char> &image, const std::string &filename, int &x, int &y);
 void returnColorValues(int &x, int &y, int &width, const size_t &RGBA, std::vector<unsigned char> &image);
 bool write_char_array(std::ostream &os, const char *string);
 float f(float x, float y);
@@ -60,10 +60,7 @@ float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
 const size_t RGBA = 4;
-int image_width, image_height;
 static std::vector<unsigned char> image;
-int x = image_width;
-int y = image_height;
 
 static char filepath[128] = {0};
 static char currentFilename[128] = "-";
@@ -73,6 +70,9 @@ glm::vec3 heightmapColor{1.0f, 1.0f, 1.0f};
 
 static int N = 40; // image width
 static int M = 20; // image height
+
+int image_width = N;
+int image_height = M;
 
 // filesystem namespace
 namespace fs = std::experimental::filesystem;
@@ -248,6 +248,7 @@ int main()
       model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
       model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
       model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0, 0, 1));
+
       model = glm::scale(model, glm::vec3(10.0f, 10.0f * M / N, 10.0f));
 
       modelShader.setMat4("model", model);
@@ -294,7 +295,7 @@ int main()
       bool loadFile = ImGui::Button("Load File");
       if (loadFile)
       {
-         bool success = load_image(image, filepath, image_width, image_height, N);
+         bool success = load_image(image, filepath, image_width, image_height);
          if (success)
             strcpy(currentFilename, filepath);
       }
@@ -306,6 +307,8 @@ int main()
       {
          if (imageLoaded)
          {
+            N = image_width;
+            M = image_height;
             modelShader.setVec3("heightmapColor", heightmapColor);
             std::cout << "Generating grid" << '\n';
             vertices.clear();
@@ -323,11 +326,11 @@ int main()
       ImGui::DragFloat("Z Scale Factor", &heightScaling);
 
       //ImGui::InputInt("Size of N", &N);
-      ImGui::Text("Width: %i", N);
+      ImGui::Text("Width: %i", image_width);
       ImGui::SameLine();
 
       //ImGui::InputInt("Size of M", &M);
-      ImGui::Text("Height: %i", M);
+      ImGui::Text("Height: %i", image_height);
       ImGui::SameLine();
       ImGui::Text("Loaded file: %s", currentFilename);
 
@@ -465,7 +468,7 @@ void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, in
 // x and y resemble the image_width and image_height in this case
 // error handling is done through printing related strings into the console for now
 // ----------------------------------------------------------------------------------------------
-bool load_image(std::vector<unsigned char> &image, const std::string &filename, int &x, int &y, int &N)
+bool load_image(std::vector<unsigned char> &image, const std::string &filename, int &x, int &y)
 {
    write_char_array(std::cout, filepath);
    std::cout << std::endl;
@@ -477,8 +480,6 @@ bool load_image(std::vector<unsigned char> &image, const std::string &filename, 
       std::cout << "Image loaded successfully\n";
       imageLoaded = true;
       std::cout << "Image width: " << image_width << ", Image height: " << image_height << '\n';
-      N = image_width;
-      M = image_height;
    }
    else
    {
@@ -533,6 +534,7 @@ float f(float x, float y)
 // generates the actual grid by filling the vertices and indices vector
 // ---------------------------------------------------------------------
 void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<glm::uvec3> &indices)
+
 {
    {
       for (int i = 0; i <= N; ++i) // i = row
