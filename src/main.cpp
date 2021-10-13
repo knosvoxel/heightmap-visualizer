@@ -38,8 +38,8 @@ GLuint generate_vao(const std::vector<glm::vec3> &vertices, const std::vector<gl
 void draw_vao(GLuint vao, GLsizei n);
 
 // settings
-const uint16_t SCR_WIDTH = 800;
-const uint16_t SCR_HEIGHT = 600;
+const uint16_t SCR_WIDTH = 1280;
+const uint16_t SCR_HEIGHT = 720;
 
 // camera
 Camera camera(glm::vec3(5.0f, 5.0f, 5.0f));
@@ -47,12 +47,18 @@ float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
 
+// light
+glm::vec3 dirDirection{-0.2f, -1.0f, 0.3f};
+glm::vec3 dirAmbient{0.5f, 0.5f, 0.5f};
+glm::vec3 dirDiffuse{0.5f, 0.5f, 0.5f};
+glm::vec3 dirSpecular{1.0f, 1.0f, 1.0f};
+
 float cameraMovementSpeed = 4.0f;
 float cameraBoostSpeed = 8.0f;
 
 bool escapePressed = false;
 bool vsyncOn = true;
-bool wireFrameOn = true;
+bool wireFrameOn = false;
 bool shiftKeyPressed = false;
 
 // timing
@@ -65,7 +71,7 @@ static std::vector<unsigned char> image;
 static char filepath[128] = {0};
 static char currentFilename[128] = "-";
 bool imageLoaded = false;
-float heightScaling = 10.0f;
+float heightScaling = 30.0f;
 glm::vec3 heightmapColor{1.0f, 1.0f, 1.0f};
 
 static int N = 40; // image width
@@ -235,10 +241,12 @@ int main()
       processInput(window);
 
       // render
-      glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+      glClearColor(0.01f, 0.01f, 0.01f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       modelShader.use();
+
+      // camera information for the shader
       glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
       glm::mat4 view = camera.GetViewMatrix();
       modelShader.setMat4("projection", projection);
@@ -254,45 +262,27 @@ int main()
       model = model * xFlip;
       modelShader.setMat4("model", model);
 
+      // lighting information for the shader
+      modelShader.setVec3("viewPos", camera.Position);
+
+      modelShader.setVec3("light.direction", dirDirection.x, dirDirection.y, dirDirection.z);
+      modelShader.setVec3("light.ambient", dirAmbient.x, dirAmbient.y, dirAmbient.z);
+      modelShader.setVec3("light.diffuse", dirDiffuse.x, dirDiffuse.y, dirDiffuse.z);
+      modelShader.setVec3("light.specular", dirSpecular.x, dirSpecular.y, dirSpecular.z);
+
+      // material information for the shader
+      modelShader.setFloat("material.shininess", 32.0f);
+
       // ImGui Setup
       ImGui_ImplOpenGL3_NewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
-      // Basic GUI for loading images
+      // -------------------------------------------------------------------------------
+      // GUI for loading images
       ImGui::Begin("Heightmap");
       ImGui::PushItemWidth(300);
       ImGui::InputText("File Path", filepath, IM_ARRAYSIZE(filepath));
-      /*ImGui::DragInt("X", &x);
-      if (x >= image_width)
-         x = image_width;
-      if (x <= 0)
-         x = 0;
-      ImGui::SameLine();
-      ImGui::DragInt("Y", &y);
-      if (y >= image_height)
-         y = image_height;
-      if (y <= 0)
-         y = 0;
-      bool showColorValue = ImGui::Button("RGBA Value at given X/Y");
-      if (showColorValue)
-      {
-         returnColorValues(x, y, image_width, RGBA, image);
-      }
-      ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);*/
-      /*bool showImageSize = ImGui::Button("Image Size");
-      if (showImageSize)
-      {
-         if (!image.empty())
-         {
-            std::cout << "Width: " << image_width << " Height: " << image_height << '\n';
-         }
-         else
-         {
-            std::cout << "No image loaded.\n";
-         }
-      }*/
-      //ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
       bool loadFile = ImGui::Button("Load File");
       if (loadFile)
       {
@@ -325,16 +315,14 @@ int main()
       ImGui::SameLine();
       ImGui::PushItemWidth(114);
       ImGui::DragFloat("Z Scale Factor", &heightScaling);
-      if(heightScaling >= 100)
+      if (heightScaling >= 100)
          heightScaling = 100;
-      if(heightScaling <= 0)
+      if (heightScaling <= 0)
          heightScaling = 0;
 
-      //ImGui::InputInt("Size of N", &N);
       ImGui::Text("Width: %i", image_width);
       ImGui::SameLine();
 
-      //ImGui::InputInt("Size of M", &M);
       ImGui::Text("Height: %i", image_height);
       ImGui::SameLine();
       ImGui::Text("Loaded file: %s", currentFilename);
@@ -354,7 +342,8 @@ int main()
 
       ImGui::End();
 
-      //-------------------------------------------------------------------------------
+      // -------------------------------------------------------------------------------
+      // Performance window
 
       ImGui::Begin("Performance");
       ImGui::Text("VSync");
@@ -362,15 +351,18 @@ int main()
 
       ImGui::Text("Frametime: %.3f ms (FPS %.1f)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
       ImGui::End();
-      //bind textures on corresponding texture units
-      /*glBindTexture(GL_TEXTURE_2D, texture);
 
-      ourShader.use();
+      // --------------------------------------------------------------------------------
+      // Lighting window
 
-      glBindVertexArray(VAO);
+      ImGui::Begin("Lighting");
+      ImGui::DragFloat3("Direction", (float *)&dirDirection, 0.01f);
+      ImGui::ColorEdit3("Dir Ambient", (float *)&dirAmbient);
+      ImGui::ColorEdit3("Dir Diffuse", (float *)&dirDiffuse);
+      ImGui::ColorEdit3("Dir Specular", (float *)&dirSpecular);
+      ImGui::End();
 
-      glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-*/
+      // drwa all triangles of the heightmap
       draw_vao(vao, (GLsizei)indices.size() * 3);
       glFrontFace(GL_CW);
       draw_vao(vao, (GLsizei)indices.size() * 3);
@@ -539,8 +531,8 @@ float f(float x, float y)
 // generates the actual grid by filling the vertices and indices vector
 // ---------------------------------------------------------------------
 void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<glm::uvec3> &indices)
-
 {
+   // retrieve the vertices from the image
    {
       for (int i = 0; i <= N; ++i) // i = row
       {
@@ -549,7 +541,6 @@ void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<g
             float x = (float)j / (float)N; // at position j/N is x
             float y = (float)i / (float)M; // at position i/N is y
             float z = f(x, y);
-            //std::cout << "Row: " << i << " Column: " << j << " Value: " << z << '\n';
             if (imageLoaded)
             {
                size_t index = RGBA * (j * image_width + i);
@@ -557,17 +548,14 @@ void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<g
                float green = static_cast<float>(image[index + 1]);
                float blue = static_cast<float>(image[index + 2]);
 
-               //std::cout << red << ' ' << green << ' ' << blue << '\n';
-
                z = ((red * green * blue) / (255 * 255 * 255)) * heightScaling / 100;
-               //std::cout << z << '\n';
             }
             vertices.push_back(glm::vec3(x, y, z));
-
-            // NORMALS
          }
       }
 
+      std::vector<glm::vec3> face_normals;
+      // generate all indices and normals of each face
       for (int j = 0; j < N; ++j)
       {
          for (int i = 0; i < M; ++i)
@@ -576,12 +564,146 @@ void generate_grid(int N, int M, std::vector<glm::vec3> &vertices, std::vector<g
             int row2 = (j + 1) * (M + 1);
 
             // triangle 1
+            glm::vec3 vector1 = vertices[row2 + i + 1];
+            glm::vec3 vector2 = vertices[row1 + i + 1];
+
+            glm::vec3 cross = glm::cross(vector1, vector2);
+            face_normals.push_back(glm::normalize(cross));
+
             indices.push_back(glm::uvec3(row1 + i, row1 + i + 1, row2 + i + 1));
 
             // triangle 2
+            vector1 = vertices[row2 + i];
+            vector2 = vertices[row2 + i + 1];
+
+            cross = glm::cross(vector1, vector2);
+            face_normals.push_back(glm::normalize(cross));
+
             indices.push_back(glm::uvec3(row1 + i, row2 + i + 1, row2 + i));
          }
       }
+
+      // generate all normals for the vertices
+      std::vector<glm::vec3> temp_normals;
+      for (int i = 0; i < vertices.size(); ++i) // i = row
+      {
+         // the different positions of the vertices around a given vertex i
+         int vec1Pos = i - N - 1;
+         int vec2Pos = i - N;
+         int vec3Pos = i + 1;
+         int vec4Pos = i + N + 1;
+         int vec5Pos = i + N;
+         int vec6Pos = i - 1;
+
+         // initialize all the vectors around i as (0, 0, 0) 
+         glm::vec3 vec1(0, 0, 0);
+         glm::vec3 vec2(0, 0, 0);
+         glm::vec3 vec3(0, 0, 0);
+         glm::vec3 vec4(0, 0, 0);
+         glm::vec3 vec5(0, 0, 0);
+         glm::vec3 vec6(0, 0, 0);
+
+         glm::vec3 indicesAroundVector[6];
+
+         int vec1X = (vec1Pos) / N;
+         int vec1Y = (vec1Pos) % N;
+
+         // for each vertex around i check whether the vertex is on the grid or not. 
+         // If that's the case then save it's value into the indicesAroundVector[] array.
+         // Otherwise just use the previously initialized (0, 0, 0)
+         if (vec1X >= 0 && vec1Y >= 0 && vec1X <= N && vec1Y <= M)
+         {
+            vec1 = vertices[vec1Pos];
+            indicesAroundVector[0] = vec1;
+         }
+         else
+         {
+            indicesAroundVector[0] = glm::vec3(0, 0, 0);
+         }
+
+         int vec2X = (vec2Pos) / N;
+         int vec2Y = (vec2Pos) % N;
+
+         if (vec2X >= 0 && vec2Y >= 0 && vec2X <= N && vec2Y <= M)
+         {
+            vec2 = vertices[vec2Pos];
+            indicesAroundVector[1] = vec2;
+         }
+         else
+         {
+            indicesAroundVector[1] = glm::vec3(0, 0, 0);
+         }
+
+         int vec3X = (vec3Pos) / N;
+         int vec3Y = (vec3Pos) % N;
+
+         if (vec3X >= 0 && vec3Y >= 0 && vec3X <= N && vec3Y <= M)
+         {
+            vec3 = vertices[vec3Pos];
+            indicesAroundVector[0] = vec3;
+         }
+         else
+         {
+            indicesAroundVector[2] = glm::vec3(0, 0, 0);
+         }
+
+         int vec4X = (vec4Pos) / N;
+         int vec4Y = (vec4Pos) % N;
+
+         if (vec4X >= 0 && vec4Y >= 0 && vec4X <= N && vec4Y <= M)
+         {
+            vec4 = vertices[vec4Pos];
+            indicesAroundVector[0] = vec4;
+         }
+         else
+         {
+            indicesAroundVector[3] = glm::vec3(0, 0, 0);
+         }
+
+         int vec5X = (vec5Pos) / N;
+         int vec5Y = (vec5Pos) % N;
+
+         if (vec5X >= 0 && vec5Y >= 0 && vec5X <= N && vec5Y <= M)
+         {
+            vec5 = vertices[vec5Pos];
+            indicesAroundVector[0] = vec5;
+         }
+         else
+         {
+            indicesAroundVector[4] = glm::vec3(0, 0, 0);
+         }
+
+         int vec6X = (vec6Pos) / N;
+         int vec6Y = (vec6Pos) % N;
+
+         if (vec6X >= 0 && vec6Y >= 0 && vec6X <= N && vec6Y <= M)
+         {
+            vec6 = vertices[vec6Pos];
+            indicesAroundVector[5] = vec6;
+         }
+         else
+         {
+            indicesAroundVector[5] = glm::vec3(0, 0, 0);
+         }
+
+         // calculate the normal of i by adding up all the vectors around i
+         glm::vec3 normalOfI = indicesAroundVector[0] + indicesAroundVector[1] + indicesAroundVector[2] +
+                               indicesAroundVector[3] + indicesAroundVector[4] + indicesAroundVector[5];
+         if (normalOfI.z < 0)
+            normalOfI.z = normalOfI.z * -1;
+         // push them into the temporary normals array in a normalized way
+         temp_normals.push_back(glm::normalize(normalOfI));
+      }
+
+      // combine vertices and normals into a single array for usage in the shader
+      std::vector<glm::vec3> newVertices;
+      for (int i = 0; i < vertices.size(); i++)
+      {
+         newVertices.push_back(vertices[i]);
+         newVertices.push_back(temp_normals[i]);
+      }
+
+      vertices = newVertices;
    }
 }
 
@@ -597,8 +719,12 @@ GLuint generate_vao(const std::vector<glm::vec3> &vertices, const std::vector<gl
    glGenBuffers(1, &vbo);
    glBindBuffer(GL_ARRAY_BUFFER, vbo);
    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), glm::value_ptr(vertices[0]), GL_STATIC_DRAW);
+
+   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec3), nullptr);
    glEnableVertexAttribArray(0);
-   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec3), (void *)(3 * sizeof(glm::vec3)));
+   glEnableVertexAttribArray(1);
 
    GLuint ibo;
    glGenBuffers(1, &ibo);
